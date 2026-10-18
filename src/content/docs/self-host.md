@@ -120,6 +120,7 @@ npm run secrets:production   # pushes every known secret found in .env, without 
 | `GITHUB_TOKEN` | Higher GitHub API rate limit for the changelog |
 | `RESEND_API_KEY` | Transactional email (welcome, password reset) |
 | `RAPIDAPI_KEY`, `VIDCAP_API_KEY` | YouTube transcripts (either works; RapidAPI is tried first) and the opt-in video download (either works; VidCap is tried first, with `VIDEO_QUEUE`). `RAPIDAPI_KEY` also enables Facebook, Instagram, Threads (API4) and LinkedIn adapters and their provider-backed comments. |
+| `YOUTUBE_FALLBACK_API_KEY` | A self-hosted VidCap-compatible API (for example yt-dlp on your own server), tried last for YouTube transcripts and video downloads, after VidCap and RapidAPI. Set its base URL in the `YOUTUBE_FALLBACK_URL` var; it must serve `GET /youtube/caption?url=&locale=` and `GET /youtube/media?url=` in VidCap's response format and accept the key as `X-API-Key`. Media must return stream URLs on `googlevideo.com` or `youtube.com`. Works on its own, without the hosted providers |
 | `OPENROUTER_API_KEY` | Query fan-out and Jev via OpenRouter (Workers AI is the fan-out fallback), article-image OCR and descriptions using `qwen/qwen3.6-35b-a3b`, and the opt-in video analysis using `google/gemini-3.8-flash` |
 | `TYPESAFE_API_KEY` | Jev directly from TypeSafe, when OpenRouter isn't configured |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | "Continue with GitHub" sign-in |

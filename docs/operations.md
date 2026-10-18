@@ -86,6 +86,7 @@ The adapter source files own the fixed provider hosts and paths; callers never s
 | LinkedIn posts/comments, social search (`POST /search-posts`) | `fresh-linkedin-profile-data.p.rapidapi.com` | `RAPIDAPI_KEY` |
 | YouTube video download, primary (`/api/v1/youtube/media`) | `vidcap.zuey.me` | `VIDCAP_API_KEY` |
 | YouTube video download, fallback (`/dl`) | `ytstream-download-youtube-videos.p.rapidapi.com` | `RAPIDAPI_KEY` |
+| YouTube transcript and video download, last fallback (`/youtube/caption`, `/youtube/media`) | `YOUTUBE_FALLBACK_URL` (self-hosted, optional) | `YOUTUBE_FALLBACK_API_KEY` |
 | Article-image analysis | OpenRouter `https://openrouter.ai/api/v1/chat/completions` with `qwen/qwen3.6-35b-a3b` | `OPENROUTER_API_KEY` |
 | YouTube video analysis (CDN URL as `video_url`) | OpenRouter `https://openrouter.ai/api/v1/chat/completions` with `google/gemini-3.8-flash` | `OPENROUTER_API_KEY` |
 

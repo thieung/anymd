@@ -26,7 +26,7 @@ export interface Env {
   /** Stricter bucket for MCP tools that change state. Optional: falls back to RL_MCP / RL_AUTH. */
   RL_MCP_MUTATION?: RateLimit;
   OAUTH_PROVIDER: OAuthHelpers;
-  /** Background YouTube video downloads. Optional: without it (or both VIDCAP_API_KEY and RAPIDAPI_KEY) video download is unavailable. */
+  /** Background YouTube video downloads. Optional: without it (or every YouTube provider: VIDCAP_API_KEY, RAPIDAPI_KEY, the YOUTUBE_FALLBACK_* pair) video download is unavailable. */
   VIDEO_QUEUE?: Queue<import('./convert/youtube-video').VideoJobMessage>;
 
   /** "true" or "1": only ADMIN_EMAILS can create accounts. Unset keeps sign-up open. */
@@ -42,6 +42,13 @@ export interface Env {
   CREEM_WEBHOOK_SECRET?: string;
   TYPESAFE_API_KEY?: string;
   VIDCAP_API_KEY?: string;
+  /**
+   * Optional self-hosted VidCap-compatible API (for example yt-dlp on your own server): the base URL
+   * that serves `/youtube/caption` and `/youtube/media`, and the key sent as `X-API-Key`. Both must be
+   * set. It is tried after VidCap and RapidAPI for transcripts and video downloads.
+   */
+  YOUTUBE_FALLBACK_URL?: string;
+  YOUTUBE_FALLBACK_API_KEY?: string;
   GITHUB_TOKEN?: string;
   OPENROUTER_API_KEY?: string;
   RESEND_API_KEY?: string;
