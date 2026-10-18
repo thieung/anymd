@@ -66,6 +66,7 @@ function stubFetch(provider: () => Response = () => Response.json(providerBody),
     if (url === 'https://openrouter.ai/api/v1/chat/completions') return model();
     if (url.startsWith('https://vidcap.zuey.me/api/v1/youtube/media?')) return vidcap();
     if (url.startsWith('https://ytstream-download-youtube-videos.p.rapidapi.com/')) return provider();
+    if (url.startsWith('https://ytdlp.example.test/youtube/media?')) return Response.json(vidcapBody);
     if (url === STREAM) return new Response(new Uint8Array([1, 2, 3, 4]), { headers: { 'content-length': '4' } });
     if (url.startsWith('https://www.youtube.com/oembed')) return Response.json({ title: 'A video', author_name: 'Channel', author_url: 'https://www.youtube.com/@c', thumbnail_url: '' });
     return new Response('unexpected', { status: 500 });
@@ -171,6 +172,25 @@ describe('queue consumer', () => {
     await processVideoJob(t.env, state.id, 1);
     expect(job(state.id)).toMatchObject({ status: 'ready', quality: '360p', r2_key: `videos/youtube/${VIDEO}/18.mp4` });
     expect(charges(user.id)).toEqual([{ credits: ENRICHMENT_CREDITS.videoDownload }]);
+  });
+
+  it('falls back to the self-hosted provider when VidCap and ytstream are out of quota', async () => {
+    const fetch = stubFetch(() => new Response('quota', { status: 429 }), () => new Response('quota', { status: 429 }));
+    Object.assign(t.env, { VIDCAP_API_KEY: 'vidcap-key', YOUTUBE_FALLBACK_URL: 'https://ytdlp.example.test', YOUTUBE_FALLBACK_API_KEY: 'fallback-key' });
+    const user = await seedUser(t, 'user');
+    const state = (await startVideoDownload(t.env, principalOf(user.id), 'free', 'api', `https://youtu.be/${VIDEO}`)) as { id: string };
+    await processVideoJob(t.env, state.id, 1);
+    expect(job(state.id)).toMatchObject({ status: 'ready', quality: '240p', r2_key: `videos/youtube/${VIDEO}/18.mp4` });
+    const hosts = fetch.mock.calls.map(([u]) => new URL(String(u)).hostname).filter((h) => !h.endsWith('googlevideo.com'));
+    expect(hosts).toEqual(['vidcap.zuey.me', 'ytstream-download-youtube-videos.p.rapidapi.com', 'ytdlp.example.test']);
+    const fallbackCall = fetch.mock.calls.find(([u]) => String(u).includes('ytdlp.example.test'))!;
+    expect(fallbackCall[1]?.headers).toMatchObject({ 'X-API-Key': 'fallback-key' });
+  });
+
+  it('is available with only the self-hosted fallback', async () => {
+    Object.assign(t.env, { RAPIDAPI_KEY: undefined, YOUTUBE_FALLBACK_URL: 'https://ytdlp.example.test', YOUTUBE_FALLBACK_API_KEY: 'fallback-key' });
+    const user = await seedUser(t, 'user');
+    expect(await startVideoDownload(t.env, principalOf(user.id), 'free', 'api', `https://youtu.be/${VIDEO}`)).toMatchObject({ status: 'queued' });
   });
 
   it('is available with only the VidCap key', async () => {

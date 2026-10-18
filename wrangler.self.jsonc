@@ -21,7 +21,8 @@
     "CREEM_SERVER": "production",
     "POLAR_SERVER": "production",
     "SIGNUP_DISABLED": "true",
-    "ANONYMOUS_CONVERT_DISABLED": "true"
+    "ANONYMOUS_CONVERT_DISABLED": "true",
+    "YOUTUBE_FALLBACK_URL": "https://ytdlp.harnesskit.cc"
   },
   "d1_databases": [{ "binding": "DB", "database_name": "anymd-self", "database_id": "ade1752a-cbf8-4d41-b57e-cbc39e86655f", "migrations_dir": "migrations" }],
   "kv_namespaces": [

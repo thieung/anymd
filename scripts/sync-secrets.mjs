@@ -19,7 +19,7 @@ if (target !== 'staging' && target !== 'production') {
   process.exit(1);
 }
 
-const shared = ['OPENROUTER_API_KEY', 'TYPESAFE_API_KEY', 'RESEND_API_KEY', 'RAPIDAPI_KEY', 'VIDCAP_API_KEY', 'GITHUB_TOKEN'];
+const shared = ['OPENROUTER_API_KEY', 'TYPESAFE_API_KEY', 'RESEND_API_KEY', 'RAPIDAPI_KEY', 'VIDCAP_API_KEY', 'YOUTUBE_FALLBACK_API_KEY', 'GITHUB_TOKEN'];
 const secrets = Object.fromEntries(shared.map((k) => [k, process.env[k]]));
 const polarPrefix = target === 'production' ? 'POLAR_PRODUCTION_' : 'POLAR_';
 secrets.POLAR_ACCESS_TOKEN = process.env[`${polarPrefix}ACCESS_TOKEN`];

@@ -1,7 +1,9 @@
 /**
  * YouTube adapter — inherited from nextlevelbuilder/defuddle.
- * Metadata via oEmbed; transcript via RapidAPI youtube-transcript3, falling back to VidCap.
+ * Metadata via oEmbed; transcript via RapidAPI youtube-transcript3, falling back to VidCap, then to an
+ * optional self-hosted VidCap-compatible API.
  */
+import type { Env } from '../env';
 import { countWords, ConvertError, type ConvertContext, type ConvertResult, type SourceAdapter } from './types';
 
 const YOUTUBE_URL_PATTERN =
@@ -34,15 +36,24 @@ async function fetchOEmbed(videoUrl: string): Promise<OEmbedData> {
   return resp.json() as Promise<OEmbedData>;
 }
 
+/** The optional self-hosted VidCap-compatible API, tried after the hosted providers; null unless both values are set. */
+export function youtubeFallback(env: Env): { base: string; key: string } | null {
+  const base = env.YOUTUBE_FALLBACK_URL?.trim().replace(/\/+$/, '');
+  const key = env.YOUTUBE_FALLBACK_API_KEY;
+  return base && key ? { base, key } : null;
+}
+
+const VIDCAP_CAPTION_BASE = 'https://vidcap.xyz/api/v1';
+
 interface VidCapResponse {
   status: number;
   data: { sourceId: string; content: string; ext: string };
 }
 
-async function fetchTranscript(videoUrl: string, apiKey: string, lang?: string): Promise<string | null> {
+async function fetchTranscript(apiBase: string, videoUrl: string, apiKey: string, lang?: string): Promise<string | null> {
   const params = new URLSearchParams({ url: videoUrl });
   if (lang) params.set('locale', lang);
-  const resp = await fetch(`https://vidcap.xyz/api/v1/youtube/caption?${params}`, {
+  const resp = await fetch(`${apiBase}/youtube/caption?${params}`, {
     headers: { Accept: 'application/json', 'X-API-Key': apiKey },
   });
   if (!resp.ok) return null;
@@ -133,17 +144,22 @@ async function convertYoutube(url: URL, ctx: ConvertContext): Promise<ConvertRes
   const canonicalUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const vidcapKey = ctx.env.VIDCAP_API_KEY || '';
   const rapidKey = ctx.env.RAPIDAPI_KEY || '';
+  const fallback = youtubeFallback(ctx.env);
   const loadTranscript = async (): Promise<string | null> => {
     if (rapidKey) {
       const t = await fetchRapidTranscript(videoId, rapidKey, ctx.language).catch(() => null);
       if (t) return t;
     }
-    return vidcapKey ? fetchTranscript(canonicalUrl, vidcapKey, ctx.language).catch(() => null) : null;
+    if (vidcapKey) {
+      const t = await fetchTranscript(VIDCAP_CAPTION_BASE, canonicalUrl, vidcapKey, ctx.language).catch(() => null);
+      if (t) return t;
+    }
+    return fallback ? fetchTranscript(fallback.base, canonicalUrl, fallback.key, ctx.language).catch(() => null) : null;
   };
 
   const [oembed, transcript] = await Promise.all([
     ctx.tracer.span('youtube.oembed', () => fetchOEmbed(canonicalUrl)),
-    rapidKey || vidcapKey ? ctx.tracer.span('youtube.transcript', loadTranscript) : Promise.resolve(null),
+    rapidKey || vidcapKey || fallback ? ctx.tracer.span('youtube.transcript', loadTranscript) : Promise.resolve(null),
   ]);
 
   const thumb = oembed.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;

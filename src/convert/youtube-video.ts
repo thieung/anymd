@@ -1,7 +1,8 @@
 /**
  * Background YouTube video download to the anymd CDN. Opt-in through the `downloadVideo` reading
  * preference (off by default). A conversion only creates a job and enqueues it; the queue consumer
- * resolves the lowest-quality MP4 through VidCap (falling back to RapidAPI ytstream), streams it into
+ * resolves the lowest-quality MP4 through VidCap (falling back to RapidAPI ytstream, then to an optional
+ * self-hosted VidCap-compatible API), streams it into
  * R2 and charges credits only when the file is stored. With the `analyzeVideo` preference, a second
  * queue step then has an AI model analyze the stored video, charged by length when it is ready.
  * Callers poll the job by id (REST, MCP).
@@ -11,7 +12,7 @@ import { ENRICHMENT_CREDITS, VIDEO_ANALYSIS_CREDITS, videoAnalysisCredits } from
 import { ingestPolarUsage } from '../billing/polar';
 import { canSpend, recordUsage, type Channel } from '../lib/usage';
 import { newId, now } from '../lib/util';
-import { parseVideoId } from './youtube';
+import { parseVideoId, youtubeFallback } from './youtube';
 
 export interface VideoJobMessage {
   jobId: string;
@@ -78,7 +79,7 @@ export const VIDEO_ANALYSIS_MODEL = 'google/gemini-3.8-flash';
 export const MAX_ANALYSIS_SECONDS = 60 * 60;
 
 export function videoDownloadAvailable(env: Env): boolean {
-  return Boolean(env.VIDEO_QUEUE && (env.VIDCAP_API_KEY || env.RAPIDAPI_KEY));
+  return Boolean(env.VIDEO_QUEUE && (env.VIDCAP_API_KEY || env.RAPIDAPI_KEY || youtubeFallback(env)));
 }
 
 export function videoAnalysisAvailable(env: Env): boolean {
@@ -304,21 +305,23 @@ interface VideoProvider {
   formats(videoId: string): Promise<StreamFormat[]>;
 }
 
-/** Configured providers in order: VidCap first, RapidAPI ytstream as the fallback. */
+/** VidCap's `/youtube/media` response shape, also served by self-hosted VidCap-compatible APIs. */
+function vidcapProvider(name: string, apiBase: string, apiKey: string): VideoProvider {
+  return {
+    name,
+    async formats(videoId) {
+      const url = `${apiBase}/youtube/media?${new URLSearchParams({ url: `https://www.youtube.com/watch?v=${videoId}` })}`;
+      const data = (await providerJson(url, { 'X-API-Key': apiKey })) as { status?: number; data?: { videoFiles?: StreamFormat[] } } | null;
+      if (!data || data.status !== 1) throw new VideoJobError('video_unavailable');
+      return data.data?.videoFiles ?? [];
+    },
+  };
+}
+
+/** Configured providers in order: VidCap first, RapidAPI ytstream next, the self-hosted fallback last. */
 function videoProviders(env: Env): VideoProvider[] {
   const providers: VideoProvider[] = [];
-  const vidcapKey = env.VIDCAP_API_KEY;
-  if (vidcapKey) {
-    providers.push({
-      name: 'vidcap',
-      async formats(videoId) {
-        const url = `${VIDCAP_API_BASE}/youtube/media?${new URLSearchParams({ url: `https://www.youtube.com/watch?v=${videoId}` })}`;
-        const data = (await providerJson(url, { 'X-API-Key': vidcapKey })) as { status?: number; data?: { videoFiles?: StreamFormat[] } } | null;
-        if (!data || data.status !== 1) throw new VideoJobError('video_unavailable');
-        return data.data?.videoFiles ?? [];
-      },
-    });
-  }
+  if (env.VIDCAP_API_KEY) providers.push(vidcapProvider('vidcap', VIDCAP_API_BASE, env.VIDCAP_API_KEY));
   const rapidKey = env.RAPIDAPI_KEY;
   if (rapidKey) {
     providers.push({
@@ -331,6 +334,8 @@ function videoProviders(env: Env): VideoProvider[] {
       },
     });
   }
+  const fallback = youtubeFallback(env);
+  if (fallback) providers.push(vidcapProvider('self-hosted', fallback.base, fallback.key));
   return providers;
 }
 
