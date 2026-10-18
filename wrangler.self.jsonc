@@ -1,0 +1,45 @@
+// Private production instance of this fork. Upstream's wrangler.jsonc stays untouched so
+// `git merge upstream/main` never conflicts here. Deploy: `npm run build && npx wrangler deploy -c wrangler.self.jsonc`.
+// ADMIN_EMAILS is a Worker secret (not a var) so the owner's email stays out of this public repo.
+{
+  "name": "anymd-self",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-20",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "observability": { "enabled": true },
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
+  "account_id": "37c208abcb5f48a2a6a19f0d09b909c5",
+  "workers_dev": false,
+  "routes": [{ "pattern": "__HOST__", "custom_domain": true }],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "PUBLIC_URL": "https://__HOST__",
+    "CDN_URL": "https://__CDN_HOST__",
+    "GITHUB_REPO": "digitopvn/anymd",
+    "BILLING_PROVIDER": "polar",
+    "CREEM_SERVER": "production",
+    "POLAR_SERVER": "production",
+    "SIGNUP_DISABLED": "true",
+    "ANONYMOUS_CONVERT_DISABLED": "true"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "anymd-self", "database_id": "ade1752a-cbf8-4d41-b57e-cbc39e86655f", "migrations_dir": "migrations" }],
+  "kv_namespaces": [
+    { "binding": "OAUTH_KV", "id": "1fe437be08b94c8e956a59d0b6b49c85" },
+    { "binding": "CACHE", "id": "a70b6442b33b434c8578a934fbd24138" }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "anymd-self-media" }],
+  "vectorize": [{ "binding": "VECTORS", "index_name": "anymd-self-chunks" }],
+  "queues": {
+    "producers": [{ "binding": "VIDEO_QUEUE", "queue": "anymd-self-video-downloads" }],
+    "consumers": [{ "queue": "anymd-self-video-downloads", "max_batch_size": 1, "max_retries": 2 }]
+  },
+  "ai": { "binding": "AI" },
+  "ratelimits": [
+    { "name": "RL_ANON", "namespace_id": "4101", "simple": { "limit": 20, "period": 60 } },
+    { "name": "RL_AUTH", "namespace_id": "4102", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_DOMAIN", "namespace_id": "4103", "simple": { "limit": 60, "period": 60 } },
+    { "name": "RL_MCP", "namespace_id": "4104", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_MCP_MUTATION", "namespace_id": "4105", "simple": { "limit": 30, "period": 60 } }
+  ]
+}
