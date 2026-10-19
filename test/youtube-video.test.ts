@@ -187,6 +187,30 @@ describe('queue consumer', () => {
     expect(fallbackCall[1]?.headers).toMatchObject({ 'X-API-Key': 'fallback-key' });
   });
 
+  it('stores a file the self-hosted provider serves from its own host, and rejects other hosts', async () => {
+    const own = 'https://ytdlp.example.test/files/dQw4w9WgXcQ.mp4?exp=1&sig=abc';
+    const files = (url: string) => Response.json({ status: 1, data: { videoFiles: [{ url, mimeType: 'video/mp4; codecs="avc1.4D4015, mp4a.40.2"', qualityLabel: '240p', height: 240, lengthSeconds: '19' }] } });
+    const base = stubFetch(() => new Response('quota', { status: 429 }));
+    let served = own;
+    vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('https://ytdlp.example.test/youtube/media?')) return files(served);
+      if (url === own) return new Response(new Uint8Array([1, 2, 3, 4, 5]), { headers: { 'content-length': '5' } });
+      return base(input, init);
+    }));
+    Object.assign(t.env, { RAPIDAPI_KEY: undefined, YOUTUBE_FALLBACK_URL: 'https://ytdlp.example.test', YOUTUBE_FALLBACK_API_KEY: 'fallback-key' });
+    const user = await seedUser(t, 'user');
+    const ok = (await startVideoDownload(t.env, principalOf(user.id), 'free', 'api', `https://youtu.be/${VIDEO}`)) as { id: string };
+    await processVideoJob(t.env, ok.id, 1);
+    expect(job(ok.id)).toMatchObject({ status: 'ready', quality: '240p', bytes: 5, r2_key: `videos/youtube/${VIDEO}/lowest.mp4`, duration_seconds: 19 });
+
+    served = 'https://elsewhere.example.test/files/other.mp4';
+    const other = await seedUser(t, 'user');
+    const bad = (await startVideoDownload(t.env, principalOf(other.id), 'free', 'api', 'https://youtu.be/aaaaaaaaaaa')) as { id: string };
+    await processVideoJob(t.env, bad.id, 1);
+    expect(job(bad.id)).toMatchObject({ status: 'failed', error: 'invalid_stream_url' });
+  });
+
   it('is available with only the self-hosted fallback', async () => {
     Object.assign(t.env, { RAPIDAPI_KEY: undefined, YOUTUBE_FALLBACK_URL: 'https://ytdlp.example.test', YOUTUBE_FALLBACK_API_KEY: 'fallback-key' });
     const user = await seedUser(t, 'user');
