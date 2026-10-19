@@ -45,7 +45,8 @@ export interface Env {
   /**
    * Optional self-hosted VidCap-compatible API (for example yt-dlp on your own server): the base URL
    * that serves `/youtube/caption` and `/youtube/media`, and the key sent as `X-API-Key`. Both must be
-   * set. It is tried after VidCap and RapidAPI for transcripts and video downloads.
+   * set. It is tried after VidCap and RapidAPI for transcripts and video downloads. Its media URLs may
+   * point at YouTube's media hosts or at its own host over HTTPS (a file it downloaded itself).
    */
   YOUTUBE_FALLBACK_URL?: string;
   YOUTUBE_FALLBACK_API_KEY?: string;

@@ -303,12 +303,25 @@ async function providerJson(url: string, headers: Record<string, string>): Promi
 interface VideoProvider {
   name: string;
   formats(videoId: string): Promise<StreamFormat[]>;
+  /** A self-hosted provider may serve the file itself: HTTPS URLs on this host are accepted too. */
+  mediaHost?: string;
+}
+
+function isProviderMediaUrl(raw: string, host: string | undefined): boolean {
+  if (!host) return false;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && u.hostname === host;
+  } catch {
+    return false;
+  }
 }
 
 /** VidCap's `/youtube/media` response shape, also served by self-hosted VidCap-compatible APIs. */
-function vidcapProvider(name: string, apiBase: string, apiKey: string): VideoProvider {
+function vidcapProvider(name: string, apiBase: string, apiKey: string, mediaHost?: string): VideoProvider {
   return {
     name,
+    mediaHost,
     async formats(videoId) {
       const url = `${apiBase}/youtube/media?${new URLSearchParams({ url: `https://www.youtube.com/watch?v=${videoId}` })}`;
       const data = (await providerJson(url, { 'X-API-Key': apiKey })) as { status?: number; data?: { videoFiles?: StreamFormat[] } } | null;
@@ -335,14 +348,14 @@ function videoProviders(env: Env): VideoProvider[] {
     });
   }
   const fallback = youtubeFallback(env);
-  if (fallback) providers.push(vidcapProvider('self-hosted', fallback.base, fallback.key));
+  if (fallback) providers.push(vidcapProvider('self-hosted', fallback.base, fallback.key, new URL(fallback.base).hostname));
   return providers;
 }
 
 async function resolveFormat(provider: VideoProvider, videoId: string): Promise<{ format: StreamFormat; audio: boolean }> {
   const picked = pickLowestFormat(await provider.formats(videoId));
   if (!picked) throw new VideoJobError('no_downloadable_format');
-  if (!isYoutubeMediaUrl(picked.format.url!)) throw new VideoJobError('invalid_stream_url');
+  if (!isYoutubeMediaUrl(picked.format.url!) && !isProviderMediaUrl(picked.format.url!, provider.mediaHost)) throw new VideoJobError('invalid_stream_url');
   return picked;
 }
 
